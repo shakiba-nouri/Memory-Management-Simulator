@@ -157,4 +157,13 @@ def main():
         else:
             print("Invalid choice!")
 
+if __name__ == "__main__":
+    main()
 
+
+manager = MemoryManager(1000)
+
+manager.worst_fit(1, 200)
+manager.worst_fit(2, 300)
+manager.worst_fit(3, 100)
+manager.show_status()
