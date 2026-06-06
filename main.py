@@ -1,161 +1,148 @@
-    class Block:
-        def __init__(self, start, size, free=True, pid=None):
-            self.start = start
-            self.size = size
-            self.free = free
-            self.pid = pid
+class Block:
+    def __init__(self, start, size, free=True, pid=None):
+        self.start = start
+        self.size = size
+        self.free = free
+        self.pid = pid
 
-        def __str__(self):
-            if self.free:
-                status = "Free"
-            else:
-                status = f"P{self.pid}"
-            return f"[Start:{self.start} Size:{self.size} {status}]"
+    def __str__(self):
+        status = "Free" if self.free else f"P{self.pid}"
+        return f"[Start:{self.start:03d} Size:{self.size:03d} | {status}]"
 
 
-    class MemoryManager:
-        def __init__(self, total_size):
-            self.total_size = total_size
-            # شروع حافظه با یک بلوک آزاد به اندازه کل فضا
-            self.memory = [Block(0, total_size, True)]
+class MemoryManager:
+    def __init__(self, total_size):
+        self.total_size = total_size
+        self.memory = [Block(0, total_size, True)]
 
-        def show_status(self):
-            print(f"\n--- Memory Status (Total: {self.total_size}) ---")
-            for block in self.memory:
-                print(block)
+    def show_status(self):
+        print("\n" + "="*45)
+        print(f"--- Memory Status (Total Capacity: {self.total_size}) ---")
+        for block in self.memory:
+            print(block)
+        print("="*45)
 
-        def first_fit(self, pid, size):
-            for block in self.memory:
-                if block.free and block.size >= size:
-                    if block.size > size:
-                        new_block = Block(block.start + size, block.size - size)
-                        idx = self.memory.index(block)
-                        self.memory.insert(idx + 1, new_block)
-                        block.size = size
-                    block.free = False
-                    block.pid = pid
-                    print(f"Process {pid} allocated via First Fit.")
-                    return True
-            print(f"Error: No space for Process {pid}")
+    def first_fit(self, pid, size):
+        for block in self.memory:
+            if block.free and block.size >= size:
+                self._allocate(block, pid, size)
+                print(f"✅ Process {pid} (Size {size}) allocated via First Fit.")
+                return True
+        print(f"❌ Error: No space for Process {pid}")
+        return False
+
+    def best_fit(self, pid, size):
+        candidates = [b for b in self.memory if b.free and b.size >= size]
+        if not candidates:
+            print(f"❌ Error: No space for Process {pid} (Best Fit)")
             return False
+        best_block = min(candidates, key=lambda b: b.size)
+        self._allocate(best_block, pid, size)
+        print(f"✅ Process {pid} (Size {size}) allocated via Best Fit.")
+        return True
 
-        def best_fit(self, pid, size):
-        # پیدا کردن تمام بلوک‌های آزادی که اندازه کافی دارند
-            candidates = [block for block in self.memory if block.free and block.size >= size]
-            
-            if not candidates:
-                print(f"Error: No space for Process {pid} (Best Fit)")
-                return False
-            
-            # انتخاب بلوکی که کوچکترین اندازه را در میان کاندیداها دارد
-            best_block = min(candidates, key=lambda b: b.size)
-            
-            # تقسیم بلوک (Split) مشابه منطق قبلی که پیاده کرده بودی
-            if best_block.size > size:
-                new_block = Block(best_block.start + size, best_block.size - size)
-                idx = self.memory.index(best_block)
-                self.memory.insert(idx + 1, new_block)
-                best_block.size = size
-                
-            best_block.free = False
-            best_block.pid = pid
-            print(f"Process {pid} allocated via Best Fit.")
-            return True
+    def worst_fit(self, pid, size):
+        candidates = [b for b in self.memory if b.free and b.size >= size]
+        if not candidates:
+            print(f"❌ Error: No space for Process {pid} (Worst Fit)")
+            return False
+        worst_block = max(candidates, key=lambda b: b.size)
+        self._allocate(worst_block, pid, size)
+        print(f"✅ Process {pid} (Size {size}) allocated via Worst Fit.")
+        return True
+
+    def _allocate(self, block, pid, size):
+        if block.size > size:
+            new_block = Block(block.start + size, block.size - size)
+            idx = self.memory.index(block)
+            self.memory.insert(idx + 1, new_block)
+            block.size = size
+        block.free = False
+        block.pid = pid
+
+    def deallocate(self, pid):
+        found = False
+        for block in self.memory:
+            if not block.free and str(block.pid) == str(pid):
+                block.free = True
+                block.pid = None
+                found = True
         
-        def worst_fit(self, pid, size):
-            # پیدا کردن بلوک‌های آزاد مناسب
-            candidates = [block for block in self.memory if block.free and block.size >= size]
-            
-            if not candidates:
-                print(f"Error: No space for Process {pid} (Worst Fit)")
-                return False
-            
-            # انتخاب بزرگ‌ترین بلوک آزاد
-            worst_block = max(candidates, key=lambda b: b.size)
-            
-            # تقسیم بلوک در صورت نیاز
-            if worst_block.size > size:
-                new_block = Block(worst_block.start + size, worst_block.size - size)
-                idx = self.memory.index(worst_block)
-                self.memory.insert(idx + 1, new_block)
-                worst_block.size = size
-            
-            worst_block.free = False
-            worst_block.pid = pid
-            print(f"Process {pid} allocated via Worst Fit.")
-            return True
+        if found:
+            self._merge_free_blocks()
+            print(f"🧹 Process {pid} released and memory merged.")
+        else:
+            print(f"⚠️ Process {pid} not found.")
 
-
-        def deallocate(self, pid):
-            # همان منطق آزادسازی و ادغام که نوشتیم را اینجا می‌گذاریم
-            found = False
-            for block in self.memory:
-                if not block.free and block.pid == pid:
-                    block.free = True
-                    block.pid = None
-                    found = True
-            
-            if found:
-                self._merge_free_blocks()
-                print(f"Process {pid} released.")
+    def _merge_free_blocks(self):
+        i = 0
+        while i < len(self.memory) - 1:
+            if self.memory[i].free and self.memory[i+1].free:
+                self.memory[i].size += self.memory[i+1].size
+                self.memory.pop(i+1)
             else:
-                print(f"Process {pid} not found.")
+                i += 1
 
-        def _merge_free_blocks(self):
-            # تابع کمکی برای ادغام بلوک‌ها
-            i = 0
-            while i < len(self.memory) - 1:
-                if self.memory[i].free and self.memory[i+1].free:
-                    self.memory[i].size += self.memory[i+1].size
-                    self.memory.pop(i+1)
-                else:
-                    i += 1
+    def run_test_scenario(self):
+        print("\n🚀 Starting Automated Demo Scenarios...")
+        
+        # سناریوی اول: مقایسه الگوریتم‌ها
+        print("\n--- SCENARIO 1: Algorithm Comparison ---")
+        self.memory = [Block(0, 1000, True)] # ریست کردن حافظه
+        # ایجاد حفره‌های مختلف
+        self.first_fit("A", 100) # [0-100]
+        self.first_fit("B", 200) # [100-300]
+        self.first_fit("C", 100) # [300-400]
+        self.deallocate("B")     # ایجاد حفره 200 واحدی در وسط
+        self.show_status()
+        
+        print("\nTrying to allocate 150 units for Process X...")
+        print("Note: First Fit takes the first 200 block, Best Fit takes the smallest possible.")
+        self.best_fit("X", 150)
+        self.show_status()
 
-    def main():
-        manager = MemoryManager(1000)
+        # سناریوی دوم: آزادسازی و ادغام
+        print("\n--- SCENARIO 2: Deallocation & Merging (Coalescing) ---")
+        self.deallocate("A")
+        print("After deallocating A (next to the free block):")
+        self.show_status()
+        print("As you see, blocks were merged to prevent fragmentation.")
 
-        while True:
-            print("\n=== Memory Management Simulator ===")
-            print("1) Show memory status")
-            print("2) Allocate memory")
-            print("3) Deallocate process")
-            print("4) Exit")
 
-            choice = input("Enter your choice: ")
+def main():
+    manager = MemoryManager(1000)
 
-            if choice == "1":
-                manager.show_status()
+    while True:
+        print("\n" + "*"*30)
+        print("  MEMORY MANAGER SIMULATOR")
+        print("*"*30)
+        print("1) Show Memory Status")
+        print("2) Allocate Memory (Manual)")
+        print("3) Deallocate Process")
+        print("4) Run Automated Demo Scenarios ✨")
+        print("5) Exit")
 
-            elif choice == "2":
-                pid = input("Enter process ID: ")
-                size = int(input("Enter memory size: "))
+        choice = input("\nEnter choice: ")
 
-                print("\nSelect allocation algorithm:")
-                print("1) First Fit")
-                print("2) Best Fit")
-                print("3) Worst Fit")
-                algo = input("Your choice: ")
+        if choice == "1":
+            manager.show_status()
+        elif choice == "2":
+            pid = input("Process ID: ")
+            size = int(input("Size: "))
+            print("1) First Fit  2) Best Fit  3) Worst Fit")
+            algo = input("Choose Algorithm: ")
+            if algo == "1": manager.first_fit(pid, size)
+            elif algo == "2": manager.best_fit(pid, size)
+            elif algo == "3": manager.worst_fit(pid, size)
+        elif choice == "3":
+            pid = input("Enter Process ID to release: ")
+            manager.deallocate(pid)
+        elif choice == "4":
+            manager.run_test_scenario()
+        elif choice == "5":
+            break
+        else:
+            print("Invalid Option!")
 
-                if algo == "1":
-                    manager.first_fit(pid, size)
-                elif algo == "2":
-                    manager.best_fit(pid, size)
-                elif algo == "3":
-                    manager.worst_fit(pid, size)
-                else:
-                    print("Invalid algorithm choice!")
-
-            elif choice == "3":
-                pid = input("Enter process ID to deallocate: ")
-                manager.deallocate(pid)
-
-            elif choice == "4":
-                print("Exiting...")
-                break
-
-            else:
-                print("Invalid choice!")
-
-    if __name__ == "__main__":
-        main()
-
+if __name__ == "__main__":
+    main()
